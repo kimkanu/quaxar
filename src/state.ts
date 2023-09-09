@@ -7,3 +7,4 @@ export const nodeStateAtom = atom<NodeState>({
 });
 export const dataAtom = atom<string[]>([]);
 export const errorAtom = atom<Error[]>([]);
+export const autocompleteAtom = atom<Record<string, string[]>>({});

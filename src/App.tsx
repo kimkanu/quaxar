@@ -1,11 +1,14 @@
 import { Transition } from "@headlessui/react";
 import * as Dialog from "@radix-ui/react-dialog";
+import * as Progress from "@radix-ui/react-progress";
 import * as Select from "@radix-ui/react-select";
 import {
   IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconCopy,
+  IconFolderOpen,
+  IconKey,
   IconLoader2,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,14 +20,90 @@ import { toast } from "react-hot-toast";
 import Button from "./components/Button";
 import Celestia from "./components/Celestia";
 import { NETWORKS } from "./constants";
-import { dataAtom, errorAtom, nodeStateAtom } from "./state";
+import { autocompleteAtom, dataAtom, errorAtom, nodeStateAtom } from "./state";
 import type { Network } from "./types";
 import debug from "./utils/debug";
 import RunningPage from "./pages";
 
 export default function App() {
+  const exists = useQuery({
+    queryKey: ["exists"],
+    queryFn: async () => {
+      return window.celestia.exists();
+    },
+  });
+
+  return exists.isLoading ? null : exists.data ? <Main /> : <DownloadBinary />;
+}
+
+let downloadStarted = false;
+
+function DownloadBinary() {
+  const exists = useQuery({
+    queryKey: ["exists"],
+    queryFn: async () => {
+      return window.celestia.exists();
+    },
+  });
+
+  const [progress, setProgress] = useState({
+    percent: 0,
+    transferredBytes: 0,
+    totalBytes: 100_000_000,
+  });
+
+  useEffect(() => {
+    const handler = (
+      _: unknown,
+      percent: number,
+      transferredBytes: number,
+      totalBytes: number
+    ) => {
+      setProgress({ percent, transferredBytes, totalBytes });
+    };
+    window.ipcRenderer.on("celestia:download-progress", handler);
+
+    if (!downloadStarted) {
+      window.celestia.downloadBinary().then(() => {
+        exists.refetch();
+      });
+      downloadStarted = true;
+    }
+
+    return () => {
+      window.ipcRenderer.off("celestia:download-progress", handler);
+    };
+  }, []);
+
+  return (
+    <div className="h-full bg-primary text-white flex flex-col justify-center items-center px-6 gap-8">
+      <div className="text-6xl font-bold">
+        Qua<span className="text-[#cdb7f8]">X</span>ar
+      </div>
+      <div className="w-full max-w-lg">
+        <Progress.Root
+          value={progress.percent * 100}
+          className="h-5 w-full overflow-hidden rounded-full bg-white/20 dark:bg-gray-900 p-0.5"
+        >
+          <Progress.Indicator
+            style={{
+              width: `${progress.percent * 100}%`,
+            }}
+            className="h-full bg-white/80 rounded-full duration-300 ease-in-out"
+          />
+        </Progress.Root>
+      </div>
+      <div>
+        QuaXar is downloading the Celestia binary. This may take a while.
+      </div>
+    </div>
+  );
+}
+
+function Main() {
   const [nodeState, setNodeState] = useAtom(nodeStateAtom);
   const [data, setData] = useAtom(dataAtom);
+  const setAutocomplete = useSetAtom(autocompleteAtom);
   const setErrors = useSetAtom(errorAtom);
   const pid = useRef(-1);
 
@@ -38,6 +117,18 @@ export default function App() {
     queryKey: ["nodeExists", nodeState.network],
     queryFn: async () => {
       return window.celestia.nodeExists(nodeState.network);
+    },
+  });
+  const keysExists = useQuery({
+    queryKey: ["keysExists", nodeState.network],
+    queryFn: async () => {
+      return window.celestia.keysExists(nodeState.network);
+    },
+  });
+  const dataExists = useQuery({
+    queryKey: ["dataExists", nodeState.network],
+    queryFn: async () => {
+      return window.celestia.dataExists(nodeState.network);
     },
   });
 
@@ -72,7 +163,6 @@ export default function App() {
           window.ipcRenderer.on("celestia:error", errorHandler);
 
           if (timeoutForRetry > 0) {
-            debug.log("setting timeoutForRetry", timeoutForRetry);
             setTimeout(() => {
               if (!finished) {
                 reject(new Error("Timeout"));
@@ -148,6 +238,7 @@ export default function App() {
 
   useEffect(() => {
     setNodeState((ns) => ({ network: ns.network, status: "checking" }));
+    setAutocomplete({});
   }, [nodeState.network]);
 
   useEffect(() => {
@@ -220,6 +311,8 @@ export default function App() {
             setNodeInitializationData(nodeInitializationData);
             setIsNodeInitializationDialogOpen(true);
             setNodeState((ns) => ({ network: ns.network, status: "stopped" }));
+            keysExists.refetch();
+            dataExists.refetch();
             nodeExists.refetch();
           } else {
             // Run node
@@ -271,7 +364,7 @@ export default function App() {
           )}
           <span
             className="
-              text-4xl 
+              text-3xl font-bold
               group-hover:drop-shadow-[0_0_15px_#f8f]
               transition-[filter]
               duration-500
@@ -311,7 +404,7 @@ export default function App() {
               </Select.Icon>
             </Button>
           </Select.Trigger>
-          <Select.Content>
+          <Select.Content className="z-10">
             <Select.ScrollUpButton className="flex items-center justify-center text-gray-700">
               <IconChevronUp />
             </Select.ScrollUpButton>
@@ -342,16 +435,10 @@ export default function App() {
         </Select.Root>
       </div>
 
-      <Button
-        className={clsx(
-          "!bg-red-600/80 hover:!bg-red-600 rounded-md text-white absolute bottom-8 transition-[color,background-color,border-color,text-decoration-color,opacity]",
-          nodeState.status === "stopped"
-            ? "!opacity-100"
-            : "!opacity-0 pointer-events-none"
-        )}
-      >
-        Delete Node Data
-      </Button>
+      <div className="absolute top-4 text-2xl font-light">
+        Qua<span className="text-[#cdb7f8]">X</span>ar
+      </div>
+      <DeleteButton />
 
       <NodeInitializationDialog
         network={nodeState.network}
@@ -432,12 +519,12 @@ function NodeInitializationDialog({
               <Dialog.Title className="text-xl font-bold text-gray-900">
                 Your node on {network} has been created!
               </Dialog.Title>
-              <Dialog.Description className="mt-2 text-sm font-normal text-red-900 bg-red-300 border-2 rounded-lg border-red-600 px-3 py-2">
+              <Dialog.Description className="my-3 text-sm font-normal text-red-900 bg-red-300 border-2 rounded-lg border-red-600 px-3 py-2">
                 <span className="font-bold">EXTREMELY IMPORTANT</span>: Please
                 save the <span className="font-bold">MNEMONIC</span> shown below
                 in a secure place.
               </Dialog.Description>
-              <form className="mt-2 space-y-2">
+              <form className="space-y-2">
                 <fieldset>
                   <label
                     htmlFor="name"
@@ -540,6 +627,170 @@ function NodeInitializationDialog({
                   I saved my mnemonic
                 </Dialog.Close>
               </div>
+            </Dialog.Content>
+          </Transition.Child>
+        </Transition.Root>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function DeleteButton() {
+  const [nodeState, setNodeState] = useAtom(nodeStateAtom);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const nodeExists = useQuery({
+    queryKey: ["nodeExists", nodeState.network],
+    queryFn: async () => {
+      return window.celestia.nodeExists(nodeState.network);
+    },
+  });
+  const keysExists = useQuery({
+    queryKey: ["keysExists", nodeState.network],
+    queryFn: async () => {
+      return window.celestia.keysExists(nodeState.network);
+    },
+  });
+  const dataExists = useQuery({
+    queryKey: ["dataExists", nodeState.network],
+    queryFn: async () => {
+      return window.celestia.dataExists(nodeState.network);
+    },
+  });
+
+  return (
+    <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog.Trigger asChild>
+        <Button
+          disabled={!nodeExists.data}
+          className={clsx(
+            "!bg-red-600/80 hover:!bg-red-600 rounded-md text-white absolute bottom-8 transition-[color,background-color,border-color,text-decoration-color,opacity]",
+            nodeState.status === "stopped"
+              ? "!opacity-100"
+              : "!opacity-0 pointer-events-none"
+          )}
+        >
+          Delete Node Data
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Portal forceMount>
+        <Transition.Root show={isOpen}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <Dialog.Overlay
+              forceMount
+              className="fixed inset-0 z-20 bg-black/50"
+            />
+          </Transition.Child>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+          >
+            <Dialog.Content
+              forceMount
+              className={clsx(
+                "fixed z-50",
+                "w-[95vw] max-w-md rounded-lg p-4 md:w-full",
+                "top-[50%] left-[50%] -translate-x-[50%] -translate-y-[50%]",
+                "bg-white",
+                "focus:outline-none focus-visible:ring focus-visible:ring-purple-500 focus-visible:ring-opacity-75"
+              )}
+            >
+              <Dialog.Title className="text-xl font-bold text-gray-900">
+                Delete Node Data
+              </Dialog.Title>
+              <Dialog.Description className="mt-3 mb-4 text-sm font-normal text-red-900 bg-red-300 border-2 rounded-lg border-red-600 px-3 py-2">
+                <span className="font-bold">EXTREMELY IMPORTANT</span>: This
+                action might cause{" "}
+                <em className="font-bold not-italic">data loss</em> and{" "}
+                <em className="font-bold not-italic">cannot be undone.</em>
+              </Dialog.Description>
+
+              <section className="mt-2 space-y-2">
+                <fieldset className="flex items-center gap-4">
+                  <div className="w-36 text-sm text-gray-500">
+                    Delete key store
+                  </div>
+                  <Button
+                    disabled={!keysExists.data}
+                    className="gap-2 flex-1 min-w-0 !bg-amber-300 hover:!bg-amber-400 active:!bg-amber-500 text-amber-950 transition-colors focus:!ring-amber-600 disabled:!bg-gray-200 disabled:hover:!bg-gray-200 disabled:active:!bg-gray-200 disabled:text-gray-400"
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          `Are you sure you want to delete the key store of the node on ${nodeState.network} network?`
+                        )
+                      ) {
+                        await window.celestia.removeKeys(nodeState.network);
+                        await keysExists.refetch();
+                      }
+                    }}
+                  >
+                    <IconKey size={22} /> Delete key store
+                  </Button>
+                </fieldset>
+                <fieldset className="flex items-center gap-4">
+                  <div className="w-36 text-sm text-gray-500">
+                    Delete data store
+                  </div>
+                  <Button
+                    disabled={!dataExists.data}
+                    className="gap-2 flex-1 min-w-0 !bg-amber-300 hover:!bg-amber-400 active:!bg-amber-500 text-amber-950 transition-colors focus:!ring-amber-600 disabled:!bg-gray-200 disabled:hover:!bg-gray-200 disabled:active:!bg-gray-200 disabled:text-gray-400"
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          `Are you sure you want to delete the data store of the node on ${nodeState.network} network?`
+                        )
+                      ) {
+                        await window.celestia.removeData(nodeState.network);
+                        await dataExists.refetch();
+                      }
+                    }}
+                  >
+                    <IconFolderOpen size={22} /> Delete data store
+                  </Button>
+                </fieldset>
+                <div className="px-4 py-2">
+                  <div className="h-px bg-gray-200" />
+                </div>
+                <fieldset className="flex items-center gap-4">
+                  <div className="w-36 text-sm text-gray-500">
+                    Delete ENTIRE node
+                  </div>
+                  <Button
+                    disabled={!nodeExists.data}
+                    className="gap-2 flex-1 min-w-0 !bg-red-600 hover:!bg-red-700 active:!bg-red-800 text-white transition-colors focus:!ring-red-800 disabled:!bg-gray-200 disabled:hover:!bg-gray-200 disabled:active:!bg-gray-200 disabled:text-gray-400"
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          `Are you sure you want to delete the ENTIRE node on ${nodeState.network} network?`
+                        )
+                      ) {
+                        await window.celestia.removeNode(nodeState.network);
+                        await nodeExists.refetch();
+                        setIsOpen(false);
+                        setNodeState((ns) => ({
+                          network: ns.network,
+                          status: "uninitialized",
+                        }));
+                      }
+                    }}
+                  >
+                    <IconFolderOpen size={22} /> Delete ENTIRE node
+                  </Button>
+                </fieldset>
+              </section>
             </Dialog.Content>
           </Transition.Child>
         </Transition.Root>

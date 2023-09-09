@@ -18,14 +18,17 @@ async function main() {
   });
 
   const mainWindow = new BrowserWindow({
-    width: 600,
-    height: 600,
+    width: 800,
+    height: 640,
+    // width: 640,
+    // height: 480,
     webPreferences: {
       preload: path.join(__dirname, "electron/preload.cjs"),
       nodeIntegration: true,
       nodeIntegrationInWorker: true,
       webSecurity: false,
     },
+    icon: path.join(__dirname, "public/favicon.png"),
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

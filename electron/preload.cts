@@ -2,7 +2,7 @@
 
 import { contextBridge, ipcRenderer, webFrame } from "electron";
 
-const _handlers = {"electron":["isElectron","getAppPath","getUserDataPath"],"celestia":["run","nodeExists","kill"]};
+const _handlers = {"electron":["isElectron"],"celestia":["exists","downloadBinary","run","nodeExists","keysExists","dataExists","removeNode","removeKeys","removeData","kill"]};
 
 // eslint-disable-next-line no-restricted-syntax
 for (const namespace of Object.keys(_handlers)) {

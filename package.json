@@ -10,9 +10,10 @@
     "build": "npm run --silent build:client && npm run --silent build:electron",
     "build:client": "shx rm -rf build/ && tsc && vite build --mode electron && npm run --silent build:electron-src",
     "build:electron-src": "tsc electron/handlers.cts --esModuleInterop --module commonjs --outDir build/electron && node scripts/generatePreload.js && tsc -p tsconfig.electron.json && tsc index.cts electron/preload.cts --esModuleInterop --module commonjs --outDir build && echo 'Electron sources are built.'",
-    "build:electron": "electron-builder -w --x64 --arm64",
-    "deploy:electron": "electron-builder -w --x64 --arm64 --publish always",
-    "build:electron:mac": "electron-builder -m --arm64",
+    "build:electron": "npm run --silent build:electron:win && npm run --silent build:electron:mac && npm run --silent build:electron:linux",
+    "build:electron:win": "electron-builder -w portable --x64 --arm64 --ia32",
+    "build:electron:mac": "electron-builder -m --universal",
+    "build:electron:linux": "electron-builder -l --arm64 --x64 --armv7l",
     "preview": "vite preview",
     "lint": "eslint --fix . && prettier --write \"src/**/*.tsx\" \"src/**/*.ts\" \"src/**/*.css\" \"electron/**/*.cts\" \"index.cts\""
   },
@@ -25,6 +26,7 @@
     "@tanstack/react-query": "^4.35.0",
     "clsx": "^2.0.0",
     "copy-to-clipboard": "^3.3.3",
+    "electron-dl": "^3.5.0",
     "immer": "^10.0.2",
     "jotai": "^1.13.1",
     "react": "^18.2.0",
@@ -68,11 +70,17 @@
     }
   },
   "build": {
+    "artifactName": "quaxar-${version}.${ext}",
     "mac": {
-      "icon": "./public/images/favicon.icns"
+      "icon": "./public/favicon.icns",
+      "category": "public.app-category.utilities"
     },
     "win": {
-      "icon": "./public/images/favicon.png"
+      "icon": "./public/favicon.png",
+      "target": "portable"
+    },
+    "linux": {
+      "target": "AppImage"
     },
     "nsis": {
       "shortcutName": "QuaXar"

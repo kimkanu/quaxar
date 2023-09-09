@@ -36,3 +36,11 @@ type RunningState = {
 
 export type CommonState = { network: Network };
 export type Network = keyof typeof NETWORKS;
+export type Datatype =
+  | "hex"
+  | "data"
+  | "string"
+  | "number"
+  | "[]string"
+  | "boolean"
+  | "json";

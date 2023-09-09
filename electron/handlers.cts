@@ -2,12 +2,16 @@
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 
+import { download } from "electron-dl";
 import { type BrowserWindow } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { platform, arch } from "node:os";
 import path from "node:path";
 import { State, state } from "./state.cjs";
+
+const BINARY_REPOSITORY =
+  "https://github.com/kimkanu/celestia-node/releases/download/v0.11.0-rc12-windows/";
 
 const debug = {
   log(...args: unknown[]) {
@@ -24,6 +28,66 @@ const debug = {
   },
 };
 
+const platformToGoos = (platform: string) => {
+  switch (platform) {
+    case "darwin":
+      return "darwin";
+    case "win32":
+      return "windows";
+    case "linux":
+      return "linux";
+    default:
+      return "linux";
+  }
+};
+
+const archToGoarch = (arch: string) => {
+  switch (arch) {
+    case "x64":
+      return "amd64";
+    case "x32":
+      return "386";
+    case "arm":
+      return "arm";
+    case "arm64":
+      return "arm64";
+    default:
+      return "amd64";
+  }
+};
+
+const getCelestiaHome = (app: Electron.App) => {
+  return path.join(app.getPath("userData"), "celestia");
+};
+const OS_AND_ARCH = `${platformToGoos(platform())}-${archToGoarch(arch())}`;
+const BINARY_BASENAME = `celestia-${OS_AND_ARCH}${
+  platform() === "win32" ? ".exe" : ""
+}`;
+
+export function getExecutableMode(mode = 0) {
+  return (
+    // eslint-disable-next-line no-bitwise
+    mode | fs.constants.S_IXUSR | fs.constants.S_IXGRP | fs.constants.S_IXOTH
+  );
+}
+
+function handleError(err: any) {
+  if (err.code === "ENOENT") {
+    return false;
+  }
+  return undefined;
+}
+
+function makeExecutableSync(path: string) {
+  try {
+    const stats = fs.statSync(path);
+    fs.chmodSync(path, getExecutableMode(stats.mode));
+    return true;
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
 export const handlers = ({
   app,
   mainWindow,
@@ -31,31 +95,62 @@ export const handlers = ({
   ({
     electron: {
       isElectron: () => true,
-      getAppPath: () => app.getAppPath(),
-      getUserDataPath: () => app.getPath("userData"),
     },
     celestia: {
+      exists: () => {
+        return fs.existsSync(path.join(getCelestiaHome(app), BINARY_BASENAME));
+      },
+      downloadBinary: async () => {
+        const PREBUILT_BINARIES = [
+          "darwin-amd64",
+          "darwin-arm64",
+          "linux-amd64",
+          "linux-arm",
+          "linux-386",
+          "linux-arm64",
+          "windows-386",
+          "windows-amd64",
+        ];
+        if (!PREBUILT_BINARIES.includes(OS_AND_ARCH)) {
+          throw new Error(
+            `No prebuilt binaries for ${platform()}-${archToGoarch(arch())}`
+          );
+        }
+
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const url = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
+        console.log(url);
+
+        return download(mainWindow, url, {
+          directory: CELESTIA_HOME,
+          onProgress(progress) {
+            console.log(progress);
+            mainWindow.webContents.send(
+              "celestia:download-progress",
+              progress.percent,
+              progress.transferredBytes,
+              progress.totalBytes
+            );
+          },
+          onCompleted() {
+            makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
+          },
+        }).then(() => undefined);
+      },
       run: async (
         _: Electron.IpcMainInvokeEvent,
         channel: string,
         args: string[]
       ) => {
-        if (!require.main) {
-          throw new Error("require.main is undefined");
-        }
-        // TODO: packaged app?
-        const CELESTIA_HOME = app.getAppPath();
-        const binariesPath = path.join(
-          app.getAppPath(),
-          "bin",
-          platform(),
-          arch()
-        );
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const CELESTIA_BINARY = path.join(CELESTIA_HOME, BINARY_BASENAME);
 
-        debug.log(binariesPath);
+        if (!fs.existsSync(CELESTIA_BINARY)) {
+          throw new Error("Celestia binary does not exist");
+        }
 
         const promise = new Promise<void>((resolve, reject) => {
-          const celestia = spawn(path.join(binariesPath, "celestia"), args, {
+          const celestia = spawn(CELESTIA_BINARY, args, {
             env: {
               HOME: app.getPath("home"),
               CELESTIA_HOME,
@@ -93,19 +188,65 @@ export const handlers = ({
             }
             delete state.processes[pid];
             clearInterval(interval);
+            if (!celestia.killed) {
+              celestia.kill("SIGKILL");
+            }
           });
         });
 
         return promise;
       },
       nodeExists: async (_: Electron.IpcMainInvokeEvent, network: string) => {
-        // TODO: packaged app?
-        const CELESTIA_HOME = app.getAppPath();
+        const CELESTIA_HOME = getCelestiaHome(app);
         const pathToNode = path.join(
           CELESTIA_HOME,
           `.celestia-light-${network}`
         );
         return fs.existsSync(pathToNode);
+      },
+      keysExists: async (_: Electron.IpcMainInvokeEvent, network: string) => {
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const pathToNode = path.join(
+          CELESTIA_HOME,
+          `.celestia-light-${network}`,
+          "keys"
+        );
+        return fs.existsSync(pathToNode);
+      },
+      dataExists: async (_: Electron.IpcMainInvokeEvent, network: string) => {
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const pathToNode = path.join(
+          CELESTIA_HOME,
+          `.celestia-light-${network}`,
+          "data"
+        );
+        return fs.existsSync(pathToNode);
+      },
+      removeNode: async (_: Electron.IpcMainInvokeEvent, network: string) => {
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const pathToNode = path.join(
+          CELESTIA_HOME,
+          `.celestia-light-${network}`
+        );
+        fs.rmdirSync(pathToNode, { recursive: true });
+      },
+      removeKeys: async (_: Electron.IpcMainInvokeEvent, network: string) => {
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const pathToKeys = path.join(
+          CELESTIA_HOME,
+          `.celestia-light-${network}`,
+          "keys"
+        );
+        fs.rmdirSync(pathToKeys, { recursive: true });
+      },
+      removeData: async (_: Electron.IpcMainInvokeEvent, network: string) => {
+        const CELESTIA_HOME = getCelestiaHome(app);
+        const pathToData = path.join(
+          CELESTIA_HOME,
+          `.celestia-light-${network}`,
+          "data"
+        );
+        fs.rmdirSync(pathToData, { recursive: true });
       },
       kill: async (_: Electron.IpcMainInvokeEvent, pid: number) => {
         state.processes[pid].kill("SIGKILL");
