@@ -14,16 +14,16 @@ const BINARY_REPOSITORY =
 
 const debug = {
   log(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") console.log(...args);
+    if (process.env.NODE_ENV === "development") debug.log(...args);
   },
   error(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") console.error(...args);
+    if (process.env.NODE_ENV === "development") debug.error(...args);
   },
   warn(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") console.warn(...args);
+    if (process.env.NODE_ENV === "development") debug.warn(...args);
   },
   info(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") console.info(...args);
+    if (process.env.NODE_ENV === "development") debug.info(...args);
   },
 };
 
@@ -56,7 +56,7 @@ const archToGoarch = (arch: string) => {
 };
 
 const getCelestiaHome = (app: Electron.App) => {
-  console.log(path.join(app.getPath("userData"), "celestia"));
+  debug.log(path.join(app.getPath("userData"), "celestia"));
   return path.join(app.getPath("userData"), "celestia");
 };
 const OS_AND_ARCH = `${platformToGoos(platform())}-${archToGoarch(arch())}`;
@@ -128,7 +128,7 @@ export const handlers = ({
             resolve(res.headers.location as string);
           });
         });
-        console.log(location);
+        debug.log(location);
 
         return new Promise<void>((resolve, reject) => {
           function download(apiPath: string) {
@@ -138,18 +138,18 @@ export const handlers = ({
 
             const timeout_wrapper = (req: any) => {
               return () => {
-                console.log("abort");
+                debug.log("abort");
                 req.abort();
                 reject();
               };
             };
 
-            console.log("before");
+            debug.log("before");
 
             const request = https.get(location).on("response", (res) => {
-              console.log(res.headers);
+              debug.log(res.headers);
               const len = parseInt(res.headers["content-length"] as string, 10);
-              console.log("len", len);
+              debug.log("len", len);
               let downloaded = 0;
 
               res
