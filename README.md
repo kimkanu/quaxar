@@ -1,27 +1,40 @@
-# React + TypeScript + Vite
+# QuaXar: Cross-Platform GUI for Celestia Light Nodes
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![Splash image](./docs/images/splash.png)
 
-Currently, two official plugins are available:
+## ✨ Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+* One-click node creation
+<p float="left">
+  <img src="./docs/images/create-1.png" width="49%" />
+  <img src="./docs/images/create-2.png" width="49%" />
+</p>
 
-## Expanding the ESLint configuration
+* One-click node execution
+<p float="left">
+  <img src="./docs/images/execute-1.png" width="49%" />
+  <img src="./docs/images/execute-2.png" width="49%" />
+</p>
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+* Node deletion
+<p float="left">
+  <img src="./docs/images/delete-1.png" width="49%" />
+</p>
 
-- Configure the top-level `parserOptions` property like this:
+* Network selection
+<p float="left">
+  <img src="./docs/images/network-selection-1.png" width="49%" />
+  <img src="./docs/images/network-selection-2.png" width="49%" />
+</p>
 
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
-```
+* RPC transaction from GUI
+<p float="left">
+  <img src="./docs/images/rpc-transaction-1.png" width="49%" />
+</p>
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+* Copy text button and context-aware auto-completion
+<p float="left">
+  <img src="./docs/images/autocompletion.png" width="49%" />
+</p>
+
+* Celestia-themed cool design!

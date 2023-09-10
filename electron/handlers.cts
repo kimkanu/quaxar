@@ -1,12 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
-
-import { download } from "electron-dl";
 import { type BrowserWindow } from "electron";
+import { download } from "electron-dl";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { platform, arch } from "node:os";
+import { arch, platform } from "node:os";
 import path from "node:path";
 import { State, state } from "./state.cjs";
 
@@ -64,6 +63,19 @@ const BINARY_BASENAME = `celestia-${OS_AND_ARCH}${
   platform() === "win32" ? ".exe" : ""
 }`;
 
+/**
+ * Code copy-pasted from https://www.npmjs.com/package/make-executable
+ */
+function makeExecutableSync(path: string) {
+  try {
+    const stats = fs.statSync(path);
+    fs.chmodSync(path, getExecutableMode(stats.mode));
+    return true;
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
 export function getExecutableMode(mode = 0) {
   return (
     // eslint-disable-next-line no-bitwise
@@ -76,16 +88,6 @@ function handleError(err: any) {
     return false;
   }
   return undefined;
-}
-
-function makeExecutableSync(path: string) {
-  try {
-    const stats = fs.statSync(path);
-    fs.chmodSync(path, getExecutableMode(stats.mode));
-    return true;
-  } catch (err) {
-    return handleError(err);
-  }
 }
 
 export const handlers = ({
