@@ -2,10 +2,10 @@
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { type BrowserWindow } from "electron";
-import { download } from "electron-dl";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { arch, platform } from "node:os";
+import http from "http";
 import path from "node:path";
 import { State, state } from "./state.cjs";
 
@@ -120,24 +120,68 @@ export const handlers = ({
         }
 
         const CELESTIA_HOME = getCelestiaHome(app);
-        const url = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
-        console.log(url);
+        const fileUrl = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
 
-        return download(mainWindow, url, {
-          directory: CELESTIA_HOME,
-          onProgress(progress) {
-            console.log(progress);
-            mainWindow.webContents.send(
-              "celestia:download-progress",
-              progress.percent,
-              progress.transferredBytes,
-              progress.totalBytes
-            );
-          },
-          onCompleted() {
-            makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
-          },
-        }).then(() => undefined);
+        return new Promise<void>((resolve, reject) => {
+          function download(apiPath: string) {
+            const timeout = 10000;
+
+            const file = fs.createWriteStream(apiPath);
+
+            const timeout_wrapper = (req: any) => {
+              return () => {
+                console.log("abort");
+                req.abort();
+                reject();
+              };
+            };
+
+            console.log("before");
+
+            const request = http.get(fileUrl).on("response", (res) => {
+              console.log("in cb");
+              const len = parseInt(res.headers["content-length"] as string, 10);
+              let downloaded = 0;
+
+              res
+                .on("data", (chunk) => {
+                  file.write(chunk);
+                  downloaded += chunk.length;
+
+                  mainWindow.webContents.send(
+                    "celestia:download-progress",
+                    downloaded / len,
+                    downloaded,
+                    len
+                  );
+
+                  // reset timeout
+                  clearTimeout(timeoutId);
+                  timeoutId = setTimeout(fn, timeout);
+                })
+                .on("end", () => {
+                  // clear timeout
+                  clearTimeout(timeoutId);
+                  file.end();
+                  resolve();
+                })
+                .on("error", (err) => {
+                  // clear timeout
+                  clearTimeout(timeoutId);
+                  reject(err.message);
+                });
+            });
+
+            // generate timeout handler
+            const fn = timeout_wrapper(request);
+
+            // set initial timeout
+            let timeoutId = setTimeout(fn, timeout);
+          }
+          download(path.join(CELESTIA_HOME, BINARY_BASENAME));
+        }).then(() => {
+          makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
+        });
       },
       run: async (
         _: Electron.IpcMainInvokeEvent,
