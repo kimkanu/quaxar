@@ -31,7 +31,8 @@
     "jotai": "^1.13.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "unused-filename": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/line-clamp": "^0.4.4",
