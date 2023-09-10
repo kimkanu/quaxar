@@ -123,9 +123,10 @@ export const handlers = ({
         const CELESTIA_HOME = getCelestiaHome(app);
         const fileUrl = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
 
+        // handle redirect
         const location = await new Promise<string>((resolve) => {
           https.get(fileUrl).on("response", (res) => {
-            resolve(res.headers.location as string);
+            resolve(res.headers.location ?? fileUrl);
           });
         });
         debug.log(location);
