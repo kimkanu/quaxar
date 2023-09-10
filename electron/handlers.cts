@@ -5,7 +5,7 @@ import { type BrowserWindow } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { arch, platform } from "node:os";
-import http from "http";
+import https from "https";
 import path from "node:path";
 import { State, state } from "./state.cjs";
 
@@ -56,6 +56,7 @@ const archToGoarch = (arch: string) => {
 };
 
 const getCelestiaHome = (app: Electron.App) => {
+  console.log(path.join(app.getPath("userData"), "celestia"));
   return path.join(app.getPath("userData"), "celestia");
 };
 const OS_AND_ARCH = `${platformToGoos(platform())}-${archToGoarch(arch())}`;
@@ -122,6 +123,13 @@ export const handlers = ({
         const CELESTIA_HOME = getCelestiaHome(app);
         const fileUrl = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
 
+        const location = await new Promise<string>((resolve) => {
+          https.get(fileUrl).on("response", (res) => {
+            resolve(res.headers.location as string);
+          });
+        });
+        console.log(location);
+
         return new Promise<void>((resolve, reject) => {
           function download(apiPath: string) {
             const timeout = 10000;
@@ -138,9 +146,10 @@ export const handlers = ({
 
             console.log("before");
 
-            const request = http.get(fileUrl).on("response", (res) => {
-              console.log("in cb");
+            const request = https.get(location).on("response", (res) => {
+              console.log(res.headers);
               const len = parseInt(res.headers["content-length"] as string, 10);
+              console.log("len", len);
               let downloaded = 0;
 
               res
@@ -178,8 +187,12 @@ export const handlers = ({
             // set initial timeout
             let timeoutId = setTimeout(fn, timeout);
           }
-          download(path.join(CELESTIA_HOME, BINARY_BASENAME));
+          download(`${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`);
         }).then(() => {
+          fs.renameSync(
+            `${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`,
+            path.join(CELESTIA_HOME, BINARY_BASENAME)
+          );
           makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
         });
       },
