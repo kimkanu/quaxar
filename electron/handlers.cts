@@ -14,16 +14,16 @@ const BINARY_REPOSITORY =
 
 const debug = {
   log(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") debug.log(...args);
+    if (process.env.NODE_ENV === "development") console.log(...args);
   },
   error(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") debug.error(...args);
+    if (process.env.NODE_ENV === "development") console.error(...args);
   },
   warn(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") debug.warn(...args);
+    if (process.env.NODE_ENV === "development") console.warn(...args);
   },
   info(...args: unknown[]) {
-    if (process.env.NODE_ENV === "development") debug.info(...args);
+    if (process.env.NODE_ENV === "development") console.info(...args);
   },
 };
 
@@ -56,8 +56,13 @@ const archToGoarch = (arch: string) => {
 };
 
 const getCelestiaHome = (app: Electron.App) => {
-  debug.log(path.join(app.getPath("userData"), "celestia"));
-  return path.join(app.getPath("userData"), "celestia");
+  const home = path.join(app.getPath("userData"), "celestia");
+  if (!fs.existsSync(home)) {
+    fs.mkdirSync(home, {
+      recursive: true,
+    });
+  }
+  return home;
 };
 const OS_AND_ARCH = `${platformToGoos(platform())}-${archToGoarch(arch())}`;
 const BINARY_BASENAME = `celestia-${OS_AND_ARCH}${
