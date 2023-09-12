@@ -24,6 +24,7 @@
     "@radix-ui/react-select": "^1.2.2",
     "@tabler/icons-react": "^2.34.0",
     "@tanstack/react-query": "^4.35.0",
+    "axios": "^1.5.0",
     "clsx": "^2.0.0",
     "copy-to-clipboard": "^3.3.3",
     "electron-dl": "^3.5.0",

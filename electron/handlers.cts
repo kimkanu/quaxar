@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/consistent-type-imports */
+import axios from "axios";
 import { type BrowserWindow } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { arch, platform } from "node:os";
-import https from "https";
 import path from "node:path";
 import { State, state } from "./state.cjs";
 
@@ -126,80 +126,47 @@ export const handlers = ({
         }
 
         const CELESTIA_HOME = getCelestiaHome(app);
-        const fileUrl = `${BINARY_REPOSITORY}${BINARY_BASENAME}`;
 
-        // handle redirect
-        const location = await new Promise<string>((resolve) => {
-          https.get(fileUrl).on("response", (res) => {
-            resolve(res.headers.location ?? fileUrl);
-          });
+        const { data, headers } = await axios({
+          url: `${BINARY_REPOSITORY}${BINARY_BASENAME}`,
+          method: "GET",
+          responseType: "stream",
         });
-        debug.log(location);
 
         return new Promise<void>((resolve, reject) => {
-          function download(apiPath: string) {
-            const timeout = 10000;
+          let downloadedBytes = 0;
+          const contentLength = headers["content-length"];
 
-            const file = fs.createWriteStream(apiPath);
+          data.on("data", (chunk: Buffer) => {
+            downloadedBytes += chunk.byteLength;
 
-            const timeout_wrapper = (req: any) => {
-              return () => {
-                debug.log("abort");
-                req.abort();
-                reject();
-              };
-            };
+            mainWindow.webContents.send(
+              "celestia:download-progress",
+              downloadedBytes / contentLength,
+              downloadedBytes,
+              contentLength
+            );
+          });
 
-            debug.log("before");
-
-            const request = https.get(location).on("response", (res) => {
-              debug.log(res.headers);
-              const len = parseInt(res.headers["content-length"] as string, 10);
-              debug.log("len", len);
-              let downloaded = 0;
-
-              res
-                .on("data", (chunk) => {
-                  file.write(chunk);
-                  downloaded += chunk.length;
-
-                  mainWindow.webContents.send(
-                    "celestia:download-progress",
-                    downloaded / len,
-                    downloaded,
-                    len
-                  );
-
-                  // reset timeout
-                  clearTimeout(timeoutId);
-                  timeoutId = setTimeout(fn, timeout);
-                })
-                .on("end", () => {
-                  // clear timeout
-                  clearTimeout(timeoutId);
-                  file.end();
-                  resolve();
-                })
-                .on("error", (err) => {
-                  // clear timeout
-                  clearTimeout(timeoutId);
-                  reject(err.message);
-                });
-            });
-
-            // generate timeout handler
-            const fn = timeout_wrapper(request);
-
-            // set initial timeout
-            let timeoutId = setTimeout(fn, timeout);
-          }
-          download(`${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`);
-        }).then(() => {
-          fs.renameSync(
-            `${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`,
-            path.join(CELESTIA_HOME, BINARY_BASENAME)
+          data.pipe(
+            fs.createWriteStream(
+              `${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`
+            )
           );
-          makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
+
+          data.on("end", () => {
+            resolve();
+
+            fs.renameSync(
+              `${path.join(CELESTIA_HOME, BINARY_BASENAME)}.part`,
+              path.join(CELESTIA_HOME, BINARY_BASENAME)
+            );
+            makeExecutableSync(path.join(CELESTIA_HOME, BINARY_BASENAME));
+          });
+
+          data.on("error", (e: Error) => {
+            reject(e);
+          });
         });
       },
       run: async (
